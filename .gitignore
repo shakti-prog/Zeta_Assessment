@@ -1,0 +1,20 @@
+/node_modules
+/prisma
+/.env
+
+
+# Build output
+dist/
+build/
+.tmp/
+temp/
+tmp/
+
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json   # keep recommended extensions if you add them
+!.vscode/settings.json     # keep workspace settings only if you want to share them
