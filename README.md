@@ -325,18 +325,34 @@ curl -s -X POST http://localhost:3000/payments/decide \
     "payeeId":"m1",
     "amount":10,
     "currency":"INR",
-    "idempotencyKey":"
+    "idempotencyKey":"unique-key-123"
+  }'
+```
 
+## ⏳ Time Discipline / TODOs
 
-  ⏳ Time discipline / TODOs
+### High Priority
+- [ ] Add explicit `userMessage` field mapped from reasons for UI friendliness
+- [ ] Add Redis provider for distributed rate limiting (feature-flagged)
 
- Add explicit userMessage field mapped from reasons for UI friendliness.
- Add Redis provider for distributed rate limiting (feature-flagged).
+### Metrics & Monitoring
+- [ ] Expand metrics (decision counts by outcome, latency histograms)
+- [ ] Add Prometheus alerting rules
 
- Expand metrics (decision counts by outcome, latency histograms).
+### Testing
+- [ ] Add unit tests for edge cases:
+  - Currency mismatch
+  - Huge amounts
+  - Malformed input data
+  - Concurrent requests
 
- More unit tests on edge cases (currency mismatch, huge amounts).
+### Deployment & Infrastructure
+- [ ] Create Dockerfile for containerization
+- [ ] Add docker-compose.yml for local development with Prometheus/Grafana
+- [ ] Document deployment process
 
- Dockerfile + compose for Prometheus scraping demo.
-
- (If required) swap SQLite → Postgres; update DATABASE_URL and run migration.
+### Future Considerations
+- [ ] Migrate from SQLite to Postgres if needed:
+  - Update DATABASE_URL
+  - Run migrations
+  - Update connection pooling settings
