@@ -1,7 +1,7 @@
 # Zeta_Assessment
 # Payments Decisioning Service (NestJS + SQLite)
 
-Backend‐heavy solution for the Zeta Assessment. Features: API-key auth, token-bucket rate limiting, idempotency with replay, transactional balance updates, a deterministic “agent” with planning + tool calls (with retries/guardrails), structured logging with PII redaction, and Prometheus metrics.
+Backend‐heavy solution for the Zeta Assessment. Features: API-key auth, token-bucket rate limiting, idempotency with replay, transactional balance updates, a deterministic "agent" with planning + tool calls (with retries/guardrails), structured logging with PII redaction, and Prometheus metrics.
 
 ---
 
@@ -11,22 +11,38 @@ Backend‐heavy solution for the Zeta Assessment. Features: API-key auth, token-
 npm ci
 npx prisma generate
 npm run start:dev
+```
 
-🧭 Endpoints
+## 🧭 Endpoints
 
-POST /payments/decide
+**POST /payments/decide**
+```
 Headers: X-API-Key: <key> (required), optional x-request-id.
 
-Body: { "customerId":"<uuid>", "payeeId":"<string>", "amount": 10, "currency":"INR", "idempotencyKey":"<string>" }
-
-Response (example): { "decision":"allow|review|block", "reasons ["threshold_exceededinsufficient_funds|stub|..."],   // system codes
-  "agentTrace":[{"step":"plan","detail":"..."},{"step":"tool:fetchBalance","ok":true,"tries":1}],
-  "requestId":"<uuid>"
+Body: { 
+  "customerId": "<uuid>", 
+  "payeeId": "<string>", 
+  "amount": 10, 
+  "currency": "INR", 
+  "idempotencyKey": "<string>" 
 }
 
-GET /metrics → Prometheus text format (auto-logging ignored for this path)
+Response (example): { 
+  "decision": "allow|review|block", 
+  "reasons": ["threshold_exceeded", "insufficient_funds", "stub", "..."],
+  "agentTrace": [
+    {"step": "plan", "detail": "..."},
+    {"step": "tool:fetchBalance", "ok": true, "tries": 1}
+  ],
+  "requestId": "<uuid>"
+}
+```
 
-🏗️ Architecture (ASCII)
+**GET /metrics** → Prometheus text format (auto-logging ignored for this path)
+
+## 🏗️ Architecture (ASCII)
+
+```
 ┌───────────┐      ┌──────────────────┐      ┌──────────────────────┐
 │   Client  │ ───▶ │  Nest Controller │ ───▶ │  Guards & Intercpts  │
 └───────────┘      └──────────────────┘      ├──────────────────────┤
@@ -35,53 +51,69 @@ GET /metrics → Prometheus text format (auto-logging ignored for this path)
                                              │ RequestIdInterceptor │
                                              │ IdempotencyInterceptor (cache & replay)
                                              └─────────┬────────────┘
-                                                       │
-                                               ┌───────▼────────┐
-                                               │ PaymentsService │
-                                               └───────┬────────┘
-                                                       │
-                                               ┌───────▼──────────────┐
-                                               │  Agent (deterministic│
-                                               │  plan + tools+retry) │
-                                               └───────┬──────────────┘
-                                                       │ tool calls
-                          ┌────────────────────────────▼──────────────────────────┐
+                                                      │
+                                              ┌───────▼────────┐
+                                              │ PaymentsService │
+                                              └───────┬────────┘
+                                                      │
+                                              ┌───────▼──────────────┐
+                                              │  Agent (deterministic│
+                                              │  plan + tools+retry) │
+                                              └───────┬──────────────┘
+                                                      │ tool calls
+                          ┌───────────────────────────▼───────────────────────────┐
                           │                      Store (Prisma)                   │
-                          │  - getBalance, listRecentPayments, beginTxn+lock,     │
-                          │    createPayment, updateBalance, commit/rollback      │
-                          │  - IdempotencyRepo (Req→Response cache)               │
+                          │  - getBalance, listRecentPayments, beginTxn+lock,    │
+                          │    createPayment, updateBalance, commit/rollback     │
+                          │  - IdempotencyRepo (Req→Response cache)              │
                           └───────────────────────────────────────────────────────┘
+```
 
-Observability sidecars:
-- Logger (nestjs-pino): redaction, requestId correlation, level mapping, pretty in dev
-- Metrics (/metrics): nodejs_* and custom counters (rate-limit drops, decisions, etc.)
+## Observability
 
-⚙️ What I optimized
+- **Logger** (nestjs-pino): redaction, requestId correlation, level mapping, pretty in dev
+- **Metrics** (/metrics): nodejs_* and custom counters (rate-limit drops, decisions, etc.)
 
-Latency: in-process SQLite (no network hop), simple agent with deterministic rules and minimal I/O, token bucket in memory, idempotency replay to short-circuit repeat work.
+## ⚙️ What I optimized
 
-Simplicity: one service, Prisma for schema + migrations, Nest modules kept lean, no external infra (Redis/LLM/Kafka).
+### Latency
+- In-process SQLite (no network hop)
+- Simple agent with deterministic rules and minimal I/O
+- Token bucket in memory
+- Idempotency replay to short-circuit repeat work
 
-Security/robustness: API-key guard, input validation (class-validator), PII redaction in logs, idempotent write path inside DB transaction + per-customer locking to avoid double-spend, 4xx/5xx log levels.
+### Simplicity
+- One service
+- Prisma for schema + migrations
+- Nest modules kept lean
+- No external infra (Redis/LLM/Kafka)
 
+### Security/Robustness
+- API-key guard
+- Input validation (class-validator)
+- PII redaction in logs
+- Idempotent write path inside DB transaction
+- Per-customer locking to avoid double-spend
+- 4xx/5xx log levels
 
-🤖 Agentic-AI basics (no external LLM; plan + tools + guardrails)
+## 🤖 Agentic-AI basics (no external LLM; plan + tools + guardrails)
 
 Deterministic agent that:
 
-Plans the flow (what info is needed).
+1. Plans the flow (what info is needed)
+2. Calls tools (store functions) with max 2 retries and backoff on retriable errors
+3. Falls back to safe decision (review) if tools fail after retries or if inputs look suspicious
+4. Emits agentTrace showing plan, tool calls, tries, durations, and the final rationale
 
-Calls tools (store functions) with max 2 retries and backoff on retriable errors.
+### Pseudocode
 
-Falls back to safe decision (review) if tools fail after retries or if inputs look suspicious.
-
-Emits agentTrace showing plan, tool calls, tries, durations, and the final rationale.
-
-Pseudocode:
-
+```typescript
 plan = [
-  "fetch balance", "fetch recent payments (24h)",
-  "compute new daily total", "compare to threshold", "decide"
+  "fetch balance",
+  "fetch recent payments (24h)",
+  "compute new daily total",
+  "compare to threshold",
+  "decide"
 ];
 
 withRetry(2, async () => balance = store.getBalance(customerId));
@@ -89,15 +121,22 @@ withRetry(2, async () => recent = store.listRecentPayments(customerId));
 
 const newTotal = sum(recent) + amountCents;
 
-let decision: 'allow'|'review'|'block';
+let decision: 'allow' | 'review' | 'block';
 const reasons: string[] = [];
-if (newTotal > dailyThresholdCents) { decision = 'review'; reasons.push('threshold_exceeded'); }
-else if (balance < amountCents)     { decision = 'block';  reasons.push('insufficient_funds'); }
-else                                { decision = 'allow'; }
+
+if (newTotal > dailyThresholdCents) { 
+  decision = 'review'; 
+  reasons.push('threshold_exceeded'); 
+} else if (balance < amountCents) { 
+  decision = 'block';
+  reasons.push('insufficient_funds');
+} else {
+  decision = 'allow';
+}
 
 agentTrace = [
-  { step:'plan', detail: '...' },
-  { step:'tool:fetchBalance', ok:true, tries:1 },
+  { step: 'plan', detail: '...' },
+  { step: 'tool:fetchBalance', ok: true, tries: 1 },
   { step:'tool:listRecentPayments', ok:true, tries:1 },
   { step:'decide', decision, reasons }
 ];
