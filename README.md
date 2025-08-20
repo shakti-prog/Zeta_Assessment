@@ -140,8 +140,7 @@ agentTrace = [
   { step: 'tool:listRecentPayments', ok: true, tries: 1 },
   { step: 'decide', decision, reasons }
 ];
-
-// ... (rest of the code remains the same)
+```
 
 ## 🛡️ Guardrails
 
