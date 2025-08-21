@@ -189,28 +189,34 @@ agentTrace = [
 ## 💾 Data Model (Prisma)
 
 ```prisma
-model CustomerBalance {
-  customerId  String   @id
-  balanceCents Int
-  updatedAt   DateTime @updatedAt
+model Balance {
+  customerId     String  @id
+  availableCents BigInt
 }
 
 model Payment {
-  id           String   @id @default(uuid())
+  id           String   @id @default(cuid())
   customerId   String
   payeeId      String
-  amountCents  Int
+  amountCents  BigInt
+  currency     String
   decision     String
   createdAt    DateTime @default(now())
 }
 
 model Idempotency {
-  customerId   String
-  key          String
-  responseJson String
-  createdAt    DateTime @default(now())
-  
+  customerId String
+  key        String
+  response   Json
+  createdAt  DateTime @default(now())
   @@id([customerId, key])
+}
+
+model Case {
+  id        String   @id @default(cuid())
+  paymentId String
+  status    String
+  createdAt DateTime @default(now())
 }
 ```
 
